@@ -1,0 +1,77 @@
+import sqlite3
+import hashlib
+import time
+from getpass import getpass
+
+# Proteção contra força bruta
+MAX_ATTEMPTS = 3
+LOCKOUT_TIME = 300  # 5 minutos em segundos
+login_attempts = {}
+
+def get_user_ip():
+    # Simulação - em aplicação real, obteria o IP do cliente
+    return "127.0.0.1"
+
+def is_account_locked(username):
+    ip = get_user_ip()
+    if ip in login_attempts:
+        attempts, last_attempt = login_attempts[ip]
+        if attempts >= MAX_ATTEMPTS and (time.time() - last_attempt) < LOCKOUT_TIME:
+            return True
+    return False
+
+def record_failed_attempt(username):
+    ip = get_user_ip()
+    if ip in login_attempts:
+        attempts, _ = login_attempts[ip]
+        login_attempts[ip] = (attempts + 1, time.time())
+    else:
+        login_attempts[ip] = (1, time.time())
+
+def authenticate_user(username, password):
+    if is_account_locked(username):
+        print("Conta temporariamente bloqueada. Tente novamente mais tarde.")
+        return False
+    
+    try:
+        conn = sqlite3.connect('database.db')
+        cursor = conn.cursor()
+        
+        # Prevenção contra SQL Injection usando parâmetros
+        query = "SELECT password_hash, salt FROM users WHERE username = ?"
+        cursor.execute(query, (username,))
+        result = cursor.fetchone()
+        
+        if result:
+            stored_hash, salt = result
+            # Verificação segura de senha
+            input_hash = hashlib.pbkdf2_hmac('sha256', password.encode(), salt, 100000)
+            
+            if input_hash == stored_hash:
+                # Resetar contador após login bem-sucedido
+                if get_user_ip() in login_attempts:
+                    del login_attempts[get_user_ip()]
+                return True
+            else:
+                record_failed_attempt(username)
+                return False
+        else:
+            # Usuário não existe - registrar tentativa para evitar enumeração
+            record_failed_attempt(username)
+            return False
+            
+    except sqlite3.Error as e:
+        print(f"Erro de banco de dados: {e}")
+        return False
+    finally:
+        if conn:
+            conn.close()
+
+# Simulação de login
+username = input("Username: ")
+password = getpass("Password: ")  # Não exibe a senha digitada
+
+if authenticate_user(username, password):
+    print("Login bem-sucedido!")
+else:
+    print("Credenciais inválidas!")
