@@ -1,0 +1,6 @@
+
+O código original permitia tentativas ilimitadas de login.
+Limite de tentativas (MAX_ATTEMPTS)
+Temporização de bloqueio (LOCKOUT_TIME)
+Hash seguro com PBKDF2 e salt
+getpass() para esconder a senha durante a digitação.
